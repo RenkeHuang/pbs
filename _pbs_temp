@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Sample PBS Batch Script
+
+#PBS -q &queue_name
+### Job name
+#PBS -N &job_name
+### Declare job non-rerunable
+#PBS -r n
+### Output files
+#PBS -e &job_errfile_name
+#PBS -o &job_outfile_name
+### set number of nodes and ppn(processors per node)for the job
+#PBS -l nodes=&n_nodes:ppn=&ppn
+
+echo Working directory is $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+source activate py37
+
+python &path_to_executable_program_name
+
+conda deactivate
+
+exit 0
+
