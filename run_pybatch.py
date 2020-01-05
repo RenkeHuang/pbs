@@ -1,10 +1,13 @@
+#!/opt/intel/intelpython3/bin/python
+
 import sys
 import os
 import re
 import subprocess
+import argparse
 
 def generate_pbs_script(filename, path, queue_name, n_nodes, ppn, template_file):
-    """This function creates and saves a PBS batch script to submit a Single Processor job
+    """This function creates a PBS batch script to submit a Single Processor job
        in the current working directory.
 
     Parameters
@@ -14,16 +17,20 @@ def generate_pbs_script(filename, path, queue_name, n_nodes, ppn, template_file)
     queue_name(str): default 'high'
     n_nodes(int): number of nodes to run the job, default 1 (single processor job)
     ppn(int): number of processors per node, default 1 (single processor job)
-    template_file(str): name of a PBS script template file
+    template_file(str): (optional) name of a PBS script template file
 
     Returns
     -------
     pbs_file(str): name of the saved PBS script file
     """
     if template_file is None:
-        template_file = '/home/renke/_pbs_temp'
+        temp_file = '/home/renke/_pbs_temp'
+    else:
+        temp_file = os.path.join(os.getcwd(), template_file)
+
     pbs_template = []
-    with open(template_file, 'r') as stream:
+    
+    with open(temp_file, 'r') as stream:
         for line in stream:
             pbs_template += [line]
 
@@ -45,38 +52,60 @@ def generate_pbs_script(filename, path, queue_name, n_nodes, ppn, template_file)
 
 
     # write PBS file and return name
-    pbs_file = os.path.join(path, f"PBS_{filename.rstrip('.py')}.sh")
+    pbs_file = os.path.join(path, f'{filename.rstrip(".py")}.pbs')
     with open(pbs_file, 'w') as stream:
         stream.write(''.join(pbs_content))
     
     return pbs_file
 
 
-def run_pybatch(filename, path, queue_name='high',n_nodes=1, ppn=1, template_file=None):
+def run_pybatch(filename, path, queue_name='high',n_nodes=1, ppn=1, template_file=None, no_submit=False):
     print('Generating PBS script......')
     print(f'Try to use {n_nodes} node(s), ppn={ppn}......')
     pbs_file = generate_pbs_script(filename, path, queue_name, n_nodes, ppn, template_file)
     print('PBS script generated.')
     try:
         process = subprocess.Popen(['chmod','764',pbs_file])
-        process = subprocess.Popen(['qsub', pbs_file])
-        print(f'Submitted to quene {queue_name}')
-        process.wait()
+        if not no_submit:
+            process = subprocess.Popen(['qsub', pbs_file])
+            print(f'Submitted to quene {queue_name}')
+            process.wait()
     except:
         print(f'job {filename} failed.')
         process.kill()
 
-if __name__ == "__main__":
+def _main():
     """
+    basic usage:
     $ cd &DIR_OF_JOB_PYTHONFILE
-    $ python ~/run_pybatch.py &NAME_OF_PYTHONFILE
+    $ ~/run_pybatch &NAME.py
+    For help, 
+    $ ~/run_pybatch -h
     """
-    filename = sys.argv[1]
-    path = os.getcwd()
 
-    run_pybatch(filename, path, queue_name='low', n_nodes=1, ppn=2)
+    cli_parser = argparse.ArgumentParser(description="Create a PBS batch script for Python, and qsub the job.",
+                                         add_help=True)
+    cli_parser.version = '0.1'
+    cli_parser.add_argument('filename', metavar='NAME.py', 
+                            help='the name of the python file you want to submitt as a PBS job')
+    cli_parser.add_argument('path', action='store', nargs='?', default=os.getcwd(), 
+                            help='the path of the python file you want to submitt as a PBS job')
+    cli_parser.add_argument('-q', '--queue_name', action='store', default='low', 
+                            help='set the name of the queue to run the PBS job')
+    cli_parser.add_argument('-n', '--n_nodes', type=int, default=1, 
+                            help='set the number of node(s)')
+    cli_parser.add_argument('--ppn', action='store', type=int, default=1, 
+                            help='set the number of processor(s) per node')
+    cli_parser.add_argument('-t', '--template', action='store', type=str, metavar='TEMPLATE_FILE_NAME', 
+                            help='use a specific PBS template which resides in the current working directory. If None, the template used is "/home/renke/_pbs_temp"')
+    cli_parser.add_argument('--no_sub', action='store_true', 
+                            help='use this flag to only create the PBS and not qsub it')
 
+    args = cli_parser.parse_args()
 
+    run_pybatch(args.filename, args.path, 
+                queue_name=args.queue_name, n_nodes=args.n_nodes, ppn=args.ppn, 
+                template_file=args.template, no_submit=args.no_sub)
 
-  
-
+if __name__ == "__main__":
+    _main()
