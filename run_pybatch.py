@@ -7,7 +7,7 @@ import subprocess
 import argparse
 
 
-def generate_pbs_script(filename, path, queue_name, n_nodes, ppn,
+def generate_pbs_script(filename, path, queue_name, n_nodes, ppn, flags,
                         template_file):
     """This function creates a PBS batch script to submit a Single Processor job
        in the current working directory.
@@ -37,25 +37,35 @@ def generate_pbs_script(filename, path, queue_name, n_nodes, ppn,
             pbs_template += [line]
 
     # Populate contents of pbs script file based on parameters.
-    pbs_content = [
-        re.sub('&job_name', filename.rstrip('.py'), line)
-        for line in pbs_template
-    ]
+    if isinstance(flags, str):
+        job_name = filename.rstrip('.py') + flags.replace(' ', '_').replace('-', '_')
+    else:
+        job_name = filename.rstrip('.py')
+
+    pbs_content = [re.sub('&job_name', job_name, line) for line in pbs_template]
 
     pbs_content = [
         re.sub('&job_errfile_name',
-               filename.rstrip('.py') + ".err", line) for line in pbs_content
+               job_name + ".err", line) for line in pbs_content
     ]
 
     pbs_content = [
         re.sub('&job_outfile_name',
-               filename.rstrip('.py') + ".out", line) for line in pbs_content
+               job_name + ".out", line) for line in pbs_content
     ]
 
     pbs_content = [
         re.sub('&path_to_executable_program_name',
                os.path.join(path, filename), line) for line in pbs_content
     ]
+    if isinstance(flags, str):
+        pbs_content = [
+            re.sub('&FLAGS', flags, line) for line in pbs_content
+        ]
+    else:
+        pbs_content = [
+            re.sub('&FLAGS', '   ', line) for line in pbs_content
+        ]
 
     pbs_content = [
         re.sub('&queue_name', queue_name, line) for line in pbs_content
@@ -68,7 +78,7 @@ def generate_pbs_script(filename, path, queue_name, n_nodes, ppn,
     pbs_content = [re.sub('&ppn', str(ppn), line) for line in pbs_content]
 
     # write PBS file and return name
-    pbs_file = os.path.join(path, f'{filename.rstrip(".py")}.pbs')
+    pbs_file = os.path.join(path, f'{job_name}.pbs')
     with open(pbs_file, 'w') as stream:
         stream.write(''.join(pbs_content))
 
@@ -80,11 +90,12 @@ def run_pybatch(filename,
                 queue_name='high',
                 n_nodes=1,
                 ppn=1,
+                flags=None,
                 template_file=None,
                 no_submit=False):
     print(f'Generating PBS script for {os.path.join(path, filename)}')
     print(f'User requests quene "{queue_name}", {n_nodes} node(s), ppn = {ppn}')
-    pbs_file = generate_pbs_script(filename, path, queue_name, n_nodes, ppn,
+    pbs_file = generate_pbs_script(filename, path, queue_name, n_nodes, ppn, flags,
                                    template_file)
     print('PBS script generated.\n')
     try:
@@ -102,9 +113,9 @@ def _main():
     """
     basic usage:
     $ cd &DIR_OF_JOB_PYTHONFILE
-    $ ~/run_pybatch &NAME.py
+    $ run_pybatch &NAME.py
     For help, 
-    $ ~/run_pybatch -h
+    $ run_pybatch -h
     """
 
     cli_parser = argparse.ArgumentParser(
@@ -121,6 +132,11 @@ def _main():
         nargs='?',
         default=os.getcwd(),
         help='the path of the python file you want to submitt as a PBS job')
+    cli_parser.add_argument(
+        '-f',
+        '--flags',
+        help='provides options/args to the python script you want to submit'
+    )
     cli_parser.add_argument(
         '-q',
         '--queue_name',
@@ -158,6 +174,7 @@ def _main():
                 queue_name=args.queue_name,
                 n_nodes=args.n_nodes,
                 ppn=args.ppn,
+                flags=args.flags,
                 template_file=args.template,
                 no_submit=args.no_sub)
 
