@@ -18,9 +18,8 @@ cd $PBS_O_WORKDIR
 
 source activate py37
 
-python &path_to_executable_program_name
+python &path_to_executable_program_name &FLAGS
 
 conda deactivate
 
 exit 0
-
